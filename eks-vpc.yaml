@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Infraestructura de Red VPC para Clúster EKS - Innovatech Chile'
+
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: Rango IP principal para la VPC completa
+
+Resources:
+  # 1. La Red Virtual Principal (VPC)
+  EKSVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Innovatech-EKS-VPC
+
+  # 2. La Puerta de enlace (Internet Gateway) para que el tráfico salga a internet
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Tags:
+      - Key: Name
+        Value: Innovatech-IGW
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref EKSVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # 3. SUBREDES PÚBLICAS (Aquí se conectarán los balanceadores de carga de tu Front)
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref EKSVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: EKS-Public-Subnet-1
+        # Este Tag es obligatorio para que Kubernetes reconozca dónde crear los balanceadores
+        - Key: kubernetes.io/role/elb
+          Value: '1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref EKSVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: EKS-Public-Subnet-2
+        - Key: kubernetes.io/role/elb
+          Value: '1'
+
+  # 4. TABLA DE ENRUTAMIENTO (Le dice a las subredes públicas cómo salir a internet)
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref EKSVPC
+      Tags:
+        - Key: Name
+          Value: EKS-Public-RT
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Asociamos la Tabla de Rutas con cada subred pública
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+# 5. SALIDAS: Esto nos mostrará en pantalla las IDs generadas para usarlas en el clúster
+Outputs:
+  VpcId:
+    Description: ID de la VPC Creada
+    Value: !Ref EKSVPC
+  PublicSubnets:
+    Description: IDs de las Subredes Publicas
+    Value: !Sub "${PublicSubnet1},${PublicSubnet2}"
