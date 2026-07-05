@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Infraestructura de Red VPC para Clúster EKS - Innovatech Chile'
+Description: 'Infraestructura de Red VPC para Cluster EKS - Innovatech Chile'
 
 Parameters:
   VpcCIDR:
@@ -19,12 +19,13 @@ Resources:
         - Key: Name
           Value: Innovatech-EKS-VPC
 
-  # 2. La Puerta de enlace (Internet Gateway) para que el tráfico salga a internet
+  # 2. La Puerta de enlace (Internet Gateway)
   InternetGateway:
     Type: AWS::EC2::InternetGateway
-    Tags:
-      - Key: Name
-        Value: Innovatech-IGW
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Innovatech-IGW
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -32,7 +33,7 @@ Resources:
       VpcId: !Ref EKSVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # 3. SUBREDES PÚBLICAS (Aquí se conectarán los balanceadores de carga de tu Front)
+  # 3. SUBREDES PÚBLICAS
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -43,7 +44,6 @@ Resources:
       Tags:
         - Key: Name
           Value: EKS-Public-Subnet-1
-        # Este Tag es obligatorio para que Kubernetes reconozca dónde crear los balanceadores
         - Key: kubernetes.io/role/elb
           Value: '1'
 
@@ -60,7 +60,7 @@ Resources:
         - Key: kubernetes.io/role/elb
           Value: '1'
 
-  # 4. TABLA DE ENRUTAMIENTO (Le dice a las subredes públicas cómo salir a internet)
+  # 4. TABLA DE ENRUTAMIENTO
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -77,7 +77,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  # Asociamos la Tabla de Rutas con cada subred pública
+  # Asociaciones de Ruta
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -90,7 +90,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-# 5. SALIDAS: Esto nos mostrará en pantalla las IDs generadas para usarlas en el clúster
+# 5. SALIDAS
 Outputs:
   VpcId:
     Description: ID de la VPC Creada

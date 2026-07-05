@@ -1,0 +1,315 @@
+# ==========================================
+# REQUERIMIENTO IE5: GESTIÓN DE SECRETS Y CREDENCIALES
+# ==========================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+type: Opaque
+stringData:
+  db-password: adminpassword123
+---
+# ==========================================
+# BASE DE DATOS: MYSQL DEPLOYMENT & SERVICE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: db-password
+            - name: MYSQL_DATABASE
+              value: innovatech_db
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-db
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+---
+# ==========================================
+# BACKEND: VENTAS DEPLOYMENT & SERVICE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ventas-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ventas
+  template:
+    metadata:
+      labels:
+        app: ventas
+    spec:
+      containers:
+        - name: ventas
+          image: 402717282392.dkr.ecr.us-east-1.amazonaws.com/innovatech-ventas:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql-db:3306/innovatech_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true"
+            - name: DB_ENDPOINT
+              value: "mysql-db"
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: "innovatech_db"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: db-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ventas-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: ventas
+---
+# ==========================================
+# BACKEND: DESPACHOS DEPLOYMENT & SERVICE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: despachos-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: despachos
+  template:
+    metadata:
+      labels:
+        app: despachos
+    spec:
+      containers:
+        - name: despachos
+          image: 402717282392.dkr.ecr.us-east-1.amazonaws.com/innovatech-despachos:latest
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql-db:3306/innovatech_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true"
+            - name: DB_ENDPOINT
+              value: "mysql-db"
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_NAME
+              value: "innovatech_db"
+            - name: DB_USERNAME
+              value: "root"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: db-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: despachos-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: 8081
+  selector:
+    app: despachos
+---
+# ==========================================
+# FRONTEND: FRONT_DESPACHO DEPLOYMENT & SERVICE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: 402717282392.dkr.ecr.us-east-1.amazonaws.com/innovatech-frontend:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: frontend
+---
+# ==========================================
+# REQUERIMIENTO IE4: BALANCEO Y RUTEADO (INGRESS)
+# ==========================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: innovatech-ingress
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api/v1/ventas
+            pathType: Prefix
+            backend:
+              service:
+                name: ventas-service
+                port:
+                  number: 8080
+          - path: /api/v1/despachos
+            pathType: Prefix
+            backend:
+              service:
+                name: despachos-service
+                port:
+                  number: 8081
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+---
+# ==========================================
+# REQUERIMIENTO IE3: AUTOSCALING (HPA)
+# ==========================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ventas-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ventas-deployment
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # Justificación: Umbral de 50% CPU para escalar de forma proactiva
+          # garantizando alta disponibilidad ante picos de tráfico
+          averageUtilization: 50
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: despachos-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: despachos-deployment
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend-deployment
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
