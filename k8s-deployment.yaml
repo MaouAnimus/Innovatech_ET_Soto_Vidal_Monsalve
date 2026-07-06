@@ -1,5 +1,5 @@
 # ==========================================
-# REQUERIMIENTO IE5: GESTIÓN DE SECRETS Y CREDENCIALES
+# GESTIÓN DE SECRETS Y CREDENCIALES
 # ==========================================
 apiVersion: v1
 kind: Secret
@@ -216,7 +216,7 @@ spec:
     app: frontend
 ---
 # ==========================================
-# REQUERIMIENTO IE4: BALANCEO Y RUTEADO (INGRESS)
+# BALANCEO Y RUTEADO (INGRESS)
 # ==========================================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -251,65 +251,3 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
----
-# ==========================================
-# REQUERIMIENTO IE3: AUTOSCALING (HPA)
-# ==========================================
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: ventas-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: ventas-deployment
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          # Justificación: Umbral de 50% CPU para escalar de forma proactiva
-          # garantizando alta disponibilidad ante picos de tráfico
-          averageUtilization: 50
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: despachos-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: despachos-deployment
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 50
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: frontend-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: frontend-deployment
-  minReplicas: 2
-  maxReplicas: 4
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 50

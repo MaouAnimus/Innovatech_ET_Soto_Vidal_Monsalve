@@ -46,5 +46,6 @@ jobs:
       - name: Deploy Despachos en EKS
         run: |
           aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.EKS_CLUSTER_NAME }}
-          kubectl apply -f k8s-manifests.yaml
+          kubectl apply -f k8s-deployment.yaml
+          kubectl apply -f hpa.yaml
           kubectl rollout restart deployment/despachos-deployment
