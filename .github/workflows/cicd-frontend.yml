@@ -1,0 +1,50 @@
+name: CI/CD - Innovatech Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "front_despacho/**"
+  workflow_dispatch:
+
+jobs:
+  build-push-deploy:
+    name: Build, Push & Deploy Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout del código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # 2. Configurar credenciales AWS
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 3. Login en Amazon ECR
+      - name: Login en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Construir imagen Docker del Frontend
+      - name: Build imagen Docker Frontend
+        run: |
+          docker build -t innovatech-frontend ./front_despacho
+
+      # 5. Tag & Push a ECR
+      - name: Tag & Push imagen Frontend a ECR
+        run: |
+          docker tag innovatech-frontend:latest ${{ steps.login-ecr.outputs.registry }}/innovatech-frontend:latest
+          docker push ${{ steps.login-ecr.outputs.registry }}/innovatech-frontend:latest
+
+      # 6. Deploy en Amazon EKS
+      - name: Deploy Frontend en EKS
+        run: |
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.EKS_CLUSTER_NAME }}
+          kubectl apply -f k8s-manifests.yaml
+          kubectl rollout restart deployment/frontend-deployment
